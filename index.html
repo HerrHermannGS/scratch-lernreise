@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="de">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scratch Jr. Reise</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script>
+        // Sound-Effekte (werden nach DOM-Load initialisiert)
+        const sounds = {
+            success: null,
+            click: null
+        };
+
+        function initSounds() {
+            sounds.success = new Audio('https://assets.mixkit.co/active_storage/sfx/2018/2018-preview.mp3');
+            sounds.click = new Audio('https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3');
+            sounds.success.volume = 0.3;
+            sounds.click.volume = 0.2;
+        }
+
+        function playSound(type) {
+            if (sounds[type]) {
+                sounds[type].currentTime = 0;
+                sounds[type].play().catch(() => { }); // Fehler ignorieren falls autoplay blockiert
+            }
+        }
+    </script>
+    <style>
+        /* Deine Custom Styles aus dem React Code */
+        .rounded-canva {
+            border-radius: 2rem;
+        }
+
+        .shadow-canva {
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        .btn-primary {
+            background-color: #000000;
+            color: white;
+        }
+
+        .btn-accent {
+            background-color: #6F8F72;
+            color: white;
+        }
+
+        /* Animationen */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fadeIn {
+            animation: fadeIn 0.5s ease-out forwards;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-slideUp {
+            animation: slideUp 0.6s ease-out forwards;
+        }
+
+        /* Confetti */
+        .confetti-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            overflow: hidden;
+        }
+
+        .confetti-piece {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ffd700;
+            top: -10px;
+            opacity: 0;
+        }
+
+        /* Einfache Confetti Animation simulieren wir hier nicht komplex, um Performance zu sparen */
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+        }
+
+        .emoji-bounce {
+            transition: transform 0.3s ease;
+        }
+
+        .emoji-bounce:hover {
+            animation: pulse 0.6s ease-in-out infinite;
+        }
+
+        .btn-primary {
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body class="bg-[#FAF9F6] font-sans text-gray-800">
+
+    <div id="app"></div>
+
+    <script>
+        // --- 1. BLOCK ASSETS (Original PNGs) ---
+        function getMissionBlocksHTML(missionIndex) {
+            // DEBUG: Zeige Text statt Bilder
+            return `
+                <div class="p-4 bg-yellow-100 rounded-xl text-center">
+                    <p class="font-bold">Block-Preview für Mission ${missionIndex + 1}</p>
+                    <p class="text-sm text-gray-600">Bilder werden geladen...</p>
+                </div>
+            `;
+        }
+
+        // --- 2. DATEN (Basierend auf der offiziellen Scratch Jr. Referenz) ---
+        const MISSIONS = [
+            {
+                title: "Start bei grüner Flagge",
+                task: "Lasse deine Figur nach rechts laufen, sobald die grüne Flagge angetippt wird.",
+                tip: "Der gelbe Start-Block 'Start bei grüner Flagge' beginnt deine Befehlskette.",
+                emoji: "🐱",
+                badge: "🏁",
+                badgeTitle: "Starter"
+            },
+            {
+                title: "Ein lustiger Hüpfer",
+                task: "Lerne den Hüpfen-Block kennen. Er lässt deine Figur hochspringen und wieder landen.",
+                tip: "Blaue Bewegungsblöcke wie 'Hüpfen' verändern die Position deiner Figur auf dem Gitter.",
+                emoji: "🐸",
+                badge: "🦘",
+                badgeTitle: "Hüpfer"
+            },
+            {
+                title: "Alles auf Wiederholung",
+                task: "Nutze den Wiederholen-Block, um eine Bewegung (z.B. nach oben) mehrmals auszuführen.",
+                tip: "Der orangefarbene Kontroll-Block spart dir Zeit: Du musst nicht denselben Block oft hintereinander setzen.",
+                emoji: "🚀",
+                badge: "🔁",
+                badgeTitle: "Loop-Meister"
+            },
+            {
+                title: "Verstecken spielen",
+                task: "Mache deine Figur unsichtbar, indem du den pinken Verbergen-Block benutzt.",
+                tip: "Pinke Aussehen-Blöcke wie 'Verbergen' lassen deine Figur langsam verblassen.",
+                emoji: "👻",
+                badge: "👻",
+                badgeTitle: "Versteck-Profi"
+            }
+        ];
+
+        // --- 2. STATE MANAGEMENT (Ersatz für useState) ---
+        let state = {
+            view: 'landing', // 'landing', 'missions', 'finished'
+            currentIndex: 0,
+            userName: "",
+            showCertificate: false,
+            showTutorial: false,
+            tutorialSlide: 0
+        };
+
+        // Tutorial Slides
+        const TUTORIAL_SLIDES = [
+            {
+                title: "Willkommen bei Scratch Jr.! 🎉",
+                text: "Bevor du loslegst, zeige ich dir kurz, wie Scratch Jr. funktioniert.",
+                highlight: "Die Katze ist deine Figur. Du kannst sie programmieren!"
+            },
+            {
+                title: "Die Programmier-Leiste 🎨",
+                text: "Unten siehst du die gelbe Leiste mit bunten Blöcken. Das sind deine Befehle!",
+                highlight: "Ziehe die Blöcke in den Bereich unter deiner Figur."
+            },
+            {
+                title: "Blöcke zusammensetzen 🧩",
+                text: "Die Blöcke passen wie Puzzleteile zusammen. Setze sie in der richtigen Reihenfolge.",
+                highlight: "Jede Farbe hat eine andere Funktion: Gelb = Start, Blau = Bewegung, usw."
+            },
+            {
+                title: "Los geht's! 🚀",
+                text: "Wenn dein Programm fertig ist, drücke die grüne Flagge oben, um es zu starten!",
+                highlight: "Jetzt bist du bereit für deine erste Mission!"
+            }
+        ];
+
+        // --- 3. LOGIK (Ersatz für deine React-Funktionen) ---
+
+        function init() {
+            // Sound-System initialisieren
+            initSounds();
+
+            // LocalStorage Check (useEffect Ersatz)
+            const savedProgress = localStorage.getItem('scratch-jr-student-progress');
+            if (savedProgress) {
+                const idx = parseInt(savedProgress);
+                if (idx > 0 && idx < MISSIONS.length) {
+                    state.currentIndex = idx;
+                }
+            }
+            render();
+        }
+
+        function startJourney() {
+            const savedProgress = localStorage.getItem('scratch-jr-student-progress');
+            const idx = savedProgress ? parseInt(savedProgress) : 0;
+
+            if (idx >= MISSIONS.length) {
+                state.currentIndex = 0;
+            } else {
+                state.currentIndex = idx;
+            }
+
+            // Zeige Intro-Screen vor der ersten Mission
+            if (idx === 0) {
+                state.view = 'intro';
+            } else {
+                state.view = 'missions';
+            }
+
+            window.scrollTo(0, 0);
+            render();
+        }
+
+        function startWithTutorial() {
+            state.showTutorial = true;
+            state.tutorialSlide = 0;
+            render();
+        }
+
+        function skipToMissions() {
+            state.view = 'missions';
+            render();
+        }
+
+        function nextTutorialSlide() {
+            if (state.tutorialSlide < TUTORIAL_SLIDES.length - 1) {
+                state.tutorialSlide++;
+                render();
+            } else {
+                closeTutorial();
+            }
+        }
+
+        function prevTutorialSlide() {
+            if (state.tutorialSlide > 0) {
+                state.tutorialSlide--;
+                render();
+            }
+        }
+
+        function closeTutorial() {
+            state.showTutorial = false;
+            state.view = 'missions';
+            render();
+        }
+
+        function handleNext() {
+            // Sound & Konfetti beim Abschluss
+            playSound('success');
+            confetti({
+                particleCount: 50,
+                spread: 60,
+                origin: { y: 0.7 },
+                colors: ['#6F8F72', '#FFD700', '#3B82F6']
+            });
+
+            // Badge anzeigen
+            showBadge(state.currentIndex);
+
+            const nextIdx = state.currentIndex + 1;
+            if (nextIdx < MISSIONS.length) {
+                state.currentIndex = nextIdx;
+                localStorage.setItem('scratch-jr-student-progress', nextIdx.toString());
+            } else {
+                state.view = 'finished';
+                localStorage.setItem('scratch-jr-student-progress', MISSIONS.length.toString());
+            }
+            window.scrollTo(0, 0);
+            render();
+        }
+
+        function handleReset() {
+            if (confirm("Möchtest du wirklich von vorne anfangen?")) {
+                localStorage.removeItem('scratch-jr-student-progress');
+                state.currentIndex = 0;
+                state.view = 'landing';
+                state.showCertificate = false;
+                state.userName = "";
+                window.scrollTo(0, 0);
+                render();
+            }
+        }
+
+        function updateName(val) {
+            state.userName = val;
+            // Gezieltes Update des Buttons statt komplettes Re-Render (verhindert Fokus-Verlust)
+            const btn = document.getElementById('cert-button');
+            if (btn) {
+                const isBtnDisabled = !val.trim();
+                btn.disabled = isBtnDisabled;
+                if (isBtnDisabled) {
+                    btn.classList.add('bg-gray-300', 'cursor-not-allowed');
+                    btn.classList.remove('btn-primary', 'shadow-xl', 'active:scale-95');
+                } else {
+                    btn.classList.remove('bg-gray-300', 'cursor-not-allowed');
+                    btn.classList.add('btn-primary', 'shadow-xl', 'active:scale-95');
+                }
+            }
+        }
+
+        function showBadge(missionIndex) {
+            const mission = MISSIONS[missionIndex];
+            const badgeHTML = `
+                <div id="badge-overlay" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fadeIn" onclick="this.remove()">
+                    <div class="bg-white rounded-canva p-8 text-center space-y-4 shadow-2xl transform animate-slideUp">
+                        <div class="text-8xl emoji-bounce">${mission.badge}</div>
+                        <h2 class="text-3xl font-bold text-black">Badge freigeschaltet!</h2>
+                        <p class="text-xl text-[#6F8F72] font-bold">${mission.badgeTitle}</p>
+                        <p class="text-gray-600">Klicke irgendwo, um fortzufahren</p>
+                    </div>
+                </div>
+            `;
+            document.body.insertAdjacentHTML('beforeend', badgeHTML);
+            setTimeout(() => {
+                const overlay = document.getElementById('badge-overlay');
+                if (overlay) overlay.remove();
+            }, 3000);
+        }
+
+        function showCert() {
+            state.showCertificate = true;
+            render();
+        }
+
+        // --- 4. RENDER ENGINE (Baut das HTML basierend auf dem State) ---
+        function render() {
+            const app = document.getElementById('app');
+            let html = '';
+
+            // TUTORIAL OVERLAY
+            if (state.showTutorial) {
+                const slide = TUTORIAL_SLIDES[state.tutorialSlide];
+                const isLastSlide = state.tutorialSlide === TUTORIAL_SLIDES.length - 1;
+
+                html = `
+                <div class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-6 animate-fadeIn">
+                    <div class="bg-white rounded-canva shadow-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 transform animate-slideUp">
+                        <!-- Progress Dots -->
+                        <div class="flex justify-center gap-2 mb-4">
+                            ${TUTORIAL_SLIDES.map((_, i) => `
+                                <div class="w-3 h-3 rounded-full ${i === state.tutorialSlide ? 'bg-[#6F8F72]' : 'bg-gray-300'}"></div>
+                            `).join('')}
+                        </div>
+                        
+                        <!-- Content -->
+                        <div class="text-center space-y-4">
+                            <h2 class="text-3xl md:text-4xl font-bold text-black">${slide.title}</h2>
+                            <p class="text-xl text-gray-700 leading-relaxed">${slide.text}</p>
+                            <div class="bg-[#6F8F72]/10 p-6 rounded-2xl border-l-4 border-[#6F8F72]">
+                                <p class="text-lg font-semibold text-[#2C3E2E]">💡 ${slide.highlight}</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Navigation -->
+                        <div class="flex justify-between items-center pt-6">
+                            <button 
+                                onclick="${state.tutorialSlide > 0 ? 'prevTutorialSlide()' : 'closeTutorial()'}"
+                                class="px-6 py-3 text-gray-600 hover:text-black font-bold transition"
+                            >
+                                ${state.tutorialSlide > 0 ? '← Zurück' : 'Überspringen'}
+                            </button>
+                            
+                            <div class="text-gray-500 font-semibold">
+                                ${state.tutorialSlide + 1} / ${TUTORIAL_SLIDES.length}
+                            </div>
+                            
+                            <button 
+                                onclick="nextTutorialSlide()"
+                                class="px-8 py-4 ${isLastSlide ? 'btn-primary' : 'bg-[#6F8F72]'} text-white rounded-xl font-bold shadow-lg hover:shadow-xl transition"
+                            >
+                                ${isLastSlide ? 'Los geht\'s! 🚀' : 'Weiter →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;
+                app.innerHTML = html;
+                return;
+            }
+
+            // A. ZERTIFIKAT ANSICHT
+            if (state.showCertificate) {
+                html = `
+                <div class="min-h-screen flex flex-col items-center justify-center bg-[#FAF9F6] p-4 relative overflow-hidden animate-fadeIn">
+                    <div class="border-[12px] border-black rounded-canva p-8 md:p-12 max-w-3xl w-full text-center space-y-8 bg-white shadow-xl relative z-10">
+                        <h1 class="text-4xl md:text-5xl font-bold text-black tracking-widest">URKUNDE</h1>
+                        <p class="text-xl md:text-2xl text-gray-500">Du bist ein echter</p>
+                        <h2 class="text-3xl md:text-4xl font-bold text-[#6F8F72]">Scratch Jr. Experte</h2>
+                        
+                        <div class="py-6 md:py-10">
+                            <p class="text-4xl md:text-6xl font-bold border-b-4 border-dashed border-black inline-block px-12 pb-2">
+                                ${state.userName || "Lern-Held"}
+                            </p>
+                        </div>
+                        
+                        <p class="text-lg md:text-xl text-gray-600 italic">
+                            "Ich habe alle Missionen gemeistert und kann nun <br class="hidden md:block"/> meine eigenen digitalen Geschichten erfinden!"
+                        </p>
+                        
+                        <div class="flex justify-center gap-6 pt-6 text-5xl md:text-6xl emoji-bounce">
+                            <span>🐱</span><span>⭐</span><span>🎨</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-12 no-print flex flex-col items-center gap-4">
+                        <button onclick="window.print()" class="px-12 py-5 btn-accent text-white rounded-canva text-xl font-bold shadow-lg transform transition active:scale-95">
+                            Urkunde drucken 🖨️
+                        </button>
+                        <button onclick="state.view='landing'; state.showCertificate=false; render();" class="text-black hover:text-[#6F8F72] font-bold transition text-lg">
+                            Zurück zur Startseite 🏠
+                        </button>
+                        <button onclick="handleReset()" class="text-gray-400 hover:text-red-500 font-bold transition">
+                            Nochmal von vorne anfangen
+                        </button>
+                    </div>
+                </div>`;
+            }
+
+            // B. GESCHAFFT ANSICHT
+            else if (state.view === 'finished') {
+                const isBtnDisabled = !state.userName.trim();
+                const btnClass = isBtnDisabled ? "bg-gray-300 scale-100 cursor-not-allowed" : "btn-primary shadow-xl transform transition active:scale-95 hover:shadow-2xl";
+
+                html = `
+                <div class="min-h-screen flex items-center justify-center p-6 bg-[#FAF9F6]">
+                    <div class="bg-white p-10 rounded-canva shadow-canva max-w-lg w-full text-center space-y-8 animate-fadeIn border-t-8 border-[#6F8F72]">
+                        <div class="text-7xl">🎉</div>
+                        <h2 class="text-4xl font-bold text-black">Geschafft!</h2>
+                        <p class="text-xl text-gray-600">Du hast alle Missionen erledigt. Schreibe hier deinen Namen für deine Belohnung:</p>
+                        
+                        <input 
+                            type="text" 
+                            id="name-input"
+                            class="w-full p-5 rounded-2xl border-4 border-black text-2xl text-center outline-none focus:ring-4 focus:ring-black/10"
+                            placeholder="Dein Vorname"
+                            value="${state.userName}"
+                            oninput="updateName(this.value)"
+                            autofocus
+                        />
+                        
+                        <button 
+                            id="cert-button"
+                            onclick="showCert()"
+                            ${isBtnDisabled ? 'disabled' : ''}
+                            class="w-full py-6 text-white rounded-canva text-2xl font-bold ${isBtnDisabled ? 'bg-gray-300 cursor-not-allowed' : 'btn-primary shadow-xl transform transition active:scale-95 hover:shadow-2xl'}"
+                        >
+                            Urkunde erhalten 📜
+                        </button>
+                        <button onclick="state.view='landing'; render();" class="text-gray-400 hover:text-black font-bold transition">
+                            Abbrechen & Zurück
+                        </button>
+                    </div>
+                </div>`;
+            }
+
+            // C. INTRO SCREEN (vor erster Mission)
+            else if (state.view === 'intro') {
+                html = `
+                <div class="min-h-screen flex items-center justify-center p-6 bg-[#FAF9F6]">
+                    <div class="bg-white p-10 md:p-12 rounded-canva shadow-canva max-w-3xl w-full text-center space-y-8 animate-fadeIn border-t-8 border-[#6F8F72]">
+                        <div class="text-7xl">🎮</div>
+                        <h2 class="text-4xl md:text-5xl font-bold text-black">Bereit für deine Missionen?</h2>
+                        
+                        <div class="bg-[#FAF9F6] p-8 rounded-2xl space-y-4 text-left">
+                            <h3 class="text-2xl font-bold text-black mb-4">📋 So funktioniert's:</h3>
+                            <div class="space-y-3">
+                                <div class="flex items-start gap-3">
+                                    <span class="text-2xl">🐱</span>
+                                    <p class="text-lg text-gray-700"><strong>Deine Figur:</strong> Du programmierst die Katze in Scratch Jr.</p>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-2xl">🧩</span>
+                                    <p class="text-lg text-gray-700"><strong>Die Blöcke:</strong> Ziehe bunte Blöcke in den Bereich unter der Figur.</p>
+                                </div>
+                                <div class="flex items-start gap-3">
+                                    <span class="text-2xl">🚩</span>
+                                    <p class="text-lg text-gray-700"><strong>Start:</strong> Drücke die grüne Flagge, um dein Programm zu starten!</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-xl text-gray-600">Möchtest du zuerst ein kurzes Tutorial sehen?</p>
+
+                        <div class="flex flex-col md:flex-row gap-4 justify-center">
+                            <button 
+                                onclick="startWithTutorial()"
+                                class="px-10 py-5 bg-[#6F8F72] text-white rounded-canva text-xl font-bold shadow-xl hover:shadow-2xl hover:scale-105 transition"
+                            >
+                                📚 Tutorial ansehen (empfohlen)
+                            </button>
+                            <button 
+                                onclick="skipToMissions()"
+                                class="px-10 py-5 bg-white text-black border-4 border-black rounded-canva text-xl font-bold shadow-xl hover:shadow-2xl hover:scale-105 transition"
+                            >
+                                🚀 Direkt starten
+                            </button>
+                        </div>
+
+                        <button onclick="state.view='landing'; render();" class="text-gray-400 hover:text-black font-bold transition mt-4">
+                            ← Zurück zur Startseite
+                        </button>
+                    </div>
+                </div>`;
+            }
+
+            // D. MISSIONEN ANSICHT
+            else if (state.view === 'missions') {
+                const mission = MISSIONS[state.currentIndex];
+                const progressPercent = ((state.currentIndex) / MISSIONS.length) * 100;
+
+                html = `
+                <div class="min-h-screen flex flex-col bg-[#FAF9F6]">
+                    <div class="fixed top-0 left-0 w-full h-3 bg-gray-200 z-50">
+                        <div class="h-full bg-black transition-all duration-700 ease-out" style="width: ${progressPercent}%"></div>
+                    </div>
+                    <main class="flex-1 flex flex-col items-center justify-center p-6 max-w-2xl mx-auto w-full pt-12">
+                        <div class="w-full text-center mb-6 animate-fadeIn">
+                            <span class="bg-[#6F8F72]/20 text-[#2C3E2E] px-4 py-1 rounded-full font-bold text-sm">
+                                MISSION ${state.currentIndex + 1} VON ${MISSIONS.length}
+                            </span>
+                        </div>
+                        <div class="bg-white w-full rounded-canva shadow-canva p-8 md:p-12 space-y-8 animate-slideUp border-b-8 border-gray-100">
+                            <header class="flex flex-col items-center gap-4">
+                                <div class="bg-[#FAF9F6] p-4 flex items-center justify-center rounded-3xl min-h-[120px]">
+                                    ${getMissionBlocksHTML(state.currentIndex)}
+                                </div>
+                                <h1 class="text-3xl md:text-4xl font-bold text-gray-900 text-center">${mission.title}</h1>
+                            </header>
+                            <div class="space-y-6">
+                                <p class="text-xl md:text-2xl text-center leading-snug text-gray-700 font-medium">${mission.task}</p>
+                                <div class="bg-[#E8EDE9] p-6 rounded-2xl border-l-8 border-[#6F8F72] flex items-start gap-4">
+                                    <span class="text-3xl">💡</span>
+                                    <p class="text-[#2C3E2E] font-semibold leading-relaxed">Tipp: ${mission.tip}</p>
+                                </div>
+                            </div>
+                            <button onclick="handleNext()" class="w-full py-6 btn-primary text-white rounded-canva text-2xl font-bold shadow-lg transform transition active:scale-95">
+                                Erledigt! Weiter 🚀
+                            </button>
+                        </div>
+                        <button onclick="state.view='landing'; render();" class="mt-8 text-gray-400 hover:text-black font-bold">Zurück zur Startseite</button>
+                    </main>
+                </div>`;
+            }
+
+            // D. LANDING PAGE (Standard)
+            else {
+                html = `
+                <div class="min-h-screen pb-20 animate-fadeIn">
+                    <!-- Hero Section -->
+                    <section class="bg-gradient-to-b from-[#FAF9F6] to-white pt-20 pb-24 px-6">
+                        <div class="max-w-5xl mx-auto text-center space-y-8">
+                            <!-- Icon -->
+                            <div class="inline-block p-6 bg-[#6F8F72]/10 rounded-3xl mb-4 emoji-bounce shadow-lg">
+                                <span class="text-7xl md:text-8xl">🐱</span>
+                            </div>
+                            
+                            <!-- Headline -->
+                            <h1 class="text-5xl md:text-7xl font-bold text-black leading-tight">
+                                Deine <span class="text-[#6F8F72]">Scratch Jr.</span><br/>Lern-Reise
+                            </h1>
+                            
+                            <!-- Subheadline -->
+                            <p class="text-xl md:text-2xl text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                                Werde zum Regisseur deiner eigenen Geschichten!<br class="hidden md:block"/>
+                                Programmiere spielend mit bunten Blöcken.
+                            </p>
+                            
+                            <!-- CTA Cards -->
+                            <div class="pt-8 grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                                <!-- Card 1: Kleine Aufgaben -->
+                                <div class="bg-black text-white rounded-canva p-8 shadow-xl hover:shadow-2xl transform hover:scale-105 transition cursor-pointer" onclick="playSound('click'); startJourney();">
+                                    <div class="text-5xl mb-4">🚀</div>
+                                    <h3 class="text-2xl font-bold mb-3">Kleine Aufgaben</h3>
+                                    <p class="text-gray-300 text-sm">Löse 4 spannende Missionen und werde zum Scratch Jr. Experten!</p>
+                                </div>
+                                
+                                <!-- Card 2: Anleitung -->
+                                <a href="https://testtesttest3343e.my.canva.site/scratch-einzelseite" target="_blank" rel="noopener noreferrer" class="bg-white border-4 border-black rounded-canva p-8 shadow-xl hover:shadow-2xl transform hover:scale-105 transition block">
+                                    <div class="text-5xl mb-4">📖</div>
+                                    <h3 class="text-2xl font-bold mb-3 text-black">Anleitung</h3>
+                                    <p class="text-gray-600 text-sm">Schritt-für-Schritt zum ersten eigenen Programm.</p>
+                                </a>
+                                
+                                <!-- Card 3: Block-Bibliothek -->
+                                <a href="blocks-library.html" class="bg-[#6F8F72] text-white rounded-canva p-8 shadow-xl hover:shadow-2xl transform hover:scale-105 transition block">
+                                    <div class="text-5xl mb-4">📚</div>
+                                    <h3 class="text-2xl font-bold mb-3">Block-Lexikon</h3>
+                                    <p class="text-gray-100 text-sm">Alle wichtigen Blöcke schnell nachschlagen.</p>
+                                </a>
+                            </div>
+                            
+                            <!-- App Download -->
+                            <div class="mt-12 p-8 bg-[#6F8F72]/10 rounded-canva border-2 border-dashed border-[#6F8F72]/30 max-w-2xl mx-auto">
+                                <p class="text-xl text-gray-700 mb-4 font-semibold">💡 Hol dir die App!</p>
+                                <a 
+                                    href="https://www.scratchjr.org/#download" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    class="inline-flex items-center gap-3 px-8 py-4 bg-[#6F8F72] text-white rounded-xl text-lg font-bold hover:bg-[#5A7A5D] transition shadow-lg hover:shadow-xl"
+                                >
+                                    📱 Scratch Jr. kostenlos herunterladen
+                                </a>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- Info Section -->
+                    <section class="max-w-6xl mx-auto px-6 py-20">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
+                            <!-- Text -->
+                            <div class="space-y-6 order-2 md:order-1">
+                                <h2 class="text-4xl md:text-5xl font-bold text-black">Was ist Scratch Jr.? 🧩</h2>
+                                <p class="text-xl text-gray-600 leading-relaxed">
+                                    Stell es dir wie ein <strong>digitales Puppentheater</strong> vor, bei dem du der Regisseur bist! 
+                                    Du nutzt bunte Programmierblöcke wie Puzzleteile, um Figuren zum Leben zu erwecken.
+                                </p>
+                                
+                                <!-- Features -->
+                                <div class="space-y-4 pt-4">
+                                    <div class="flex items-start gap-4 bg-white p-5 rounded-2xl shadow-canva border-l-4 border-[#6F8F72]">
+                                        <span class="text-4xl flex-shrink-0">💃</span>
+                                        <div>
+                                            <h3 class="font-bold text-lg text-black">Figuren beleben</h3>
+                                            <p class="text-gray-600">Lass Katzen tanzen und Autos fahren!</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start gap-4 bg-white p-5 rounded-2xl shadow-canva border-l-4 border-[#6F8F72]">
+                                        <span class="text-4xl flex-shrink-0">🌍</span>
+                                        <div>
+                                            <h3 class="font-bold text-lg text-black">Eigene Welten</h3>
+                                            <p class="text-gray-600">Male deine eigenen Hintergründe.</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-start gap-4 bg-white p-5 rounded-2xl shadow-canva border-l-4 border-[#6F8F72]">
+                                        <span class="text-4xl flex-shrink-0">💬</span>
+                                        <div>
+                                            <h3 class="font-bold text-lg text-black">Stimmen aufnehmen</h3>
+                                            <p class="text-gray-600">Gib deinen Figuren deine Stimme.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Image -->
+                            <div class="order-1 md:order-2">
+                                <div class="bg-[#6F8F72]/10 p-6 rounded-canva border-4 border-dashed border-[#6F8F72]/30 aspect-square flex items-center justify-center overflow-hidden shadow-xl">
+                                    <img src="Scratch1.png" alt="Scratch Bild" class="max-w-full h-auto object-contain drop-shadow-2xl transform hover:scale-105 transition" />
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>`;
+            }
+
+            app.innerHTML = html;
+        }
+
+        // App starten
+        init();
+    </script>
+</body>
+
+</html>
